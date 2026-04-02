@@ -51,6 +51,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "update_milestone",
+      description:
+        "Update a milestone. Supports title, description, success criteria, criteria state, and status.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          milestone_id: { type: "string", description: "Milestone ID" },
+          title: { type: "string", description: "New title (optional)" },
+          description: { type: "string", description: "New description (optional)" },
+          status: {
+            type: "string",
+            enum: ["active", "completed"],
+            description: "New status (optional)",
+          },
+          success_criteria: {
+            type: "string",
+            description: "Success criteria text (optional)",
+          },
+          criteria_met: {
+            type: "boolean",
+            description: "Whether the milestone success criteria is met (optional)",
+          },
+        },
+        required: ["milestone_id"],
+      },
+    },
+    {
       name: "get_today_plan",
       description:
         "Get the daily plan for a project on a given date (defaults to today). Returns all planned tasks with current statuses.",
@@ -154,6 +181,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "evaluate_milestone",
+      description:
+        "Evaluate whether a milestone's success criteria have been met. You MUST call this after all tasks in a milestone are done. Verify each criterion by checking actual artifacts (files, plots, notebooks) before calling. The verification_note is logged to the activity feed as an audit trail.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          milestone_id: { type: "string", description: "Milestone ID to evaluate" },
+          criteria_met: {
+            type: "boolean",
+            description: "Whether the success criteria have been verified as met",
+          },
+          verification_note: {
+            type: "string",
+            description: "Explain what you checked and why criteria are met or not met. This is logged permanently.",
+          },
+        },
+        required: ["milestone_id", "criteria_met", "verification_note"],
+      },
+    },
+    {
       name: "log_progress",
       description:
         "Log a progress note to a project's activity feed. Use this to communicate status, blockers, or decisions.",
@@ -189,6 +236,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: JSON.stringify(milestones, null, 2) }] };
       }
 
+      case "update_milestone": {
+        const { milestone_id, title, description, status, success_criteria, criteria_met } = args as {
+          milestone_id: string;
+          title?: string;
+          description?: string;
+          status?: "active" | "completed";
+          success_criteria?: string;
+          criteria_met?: boolean;
+        };
+        const milestone = await apiFetch<unknown>(`/api/mcp/milestones/${milestone_id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...(typeof title === "string" ? { title } : {}),
+            ...(typeof description === "string" ? { description } : {}),
+            ...(typeof status === "string" ? { status } : {}),
+            ...(typeof success_criteria === "string" ? { successCriteria: success_criteria } : {}),
+            ...(typeof criteria_met === "boolean" ? { criteriaMet: criteria_met } : {}),
+          }),
+        });
+        return { content: [{ type: "text", text: JSON.stringify(milestone, null, 2) }] };
+      }
+
       case "get_today_plan": {
         const { project_id, date } = args as { project_id: string; date?: string };
         const params = new URLSearchParams({ projectId: project_id });
@@ -222,7 +292,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "complete_task": {
         const { task_id, note } = args as { task_id: string; note?: string };
-        const task = await apiFetch<{ projectId: string }>(`/api/mcp/tasks/${task_id}`, {
+        const task = await apiFetch<{ projectId: string; milestoneId?: string }>(`/api/mcp/tasks/${task_id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "done" }),
@@ -234,7 +304,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             body: JSON.stringify({ projectId: task.projectId, description: note }),
           });
         }
-        return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+        // Check if all tasks in this milestone are now done — prompt criteria evaluation
+        let criteriaPrompt: string | undefined;
+        if (task.milestoneId) {
+          const allTasks = await apiFetch<{ id: string; milestoneId?: string; status: string }[]>(
+            `/api/mcp/tasks?projectId=${encodeURIComponent(task.projectId)}&milestoneId=${encodeURIComponent(task.milestoneId)}`,
+          );
+          const allDone = allTasks.every((t) => t.status === "done");
+          if (allDone) {
+            const milestones = await apiFetch<{ id: string; successCriteria?: string; criteriaMet?: boolean }[]>(
+              `/api/mcp/milestones?projectId=${encodeURIComponent(task.projectId)}`,
+            );
+            const milestone = milestones.find((m) => m.id === task.milestoneId);
+            if (milestone?.successCriteria && !milestone.criteriaMet) {
+              criteriaPrompt = `\n\n--- MILESTONE EVALUATION REQUIRED ---\nAll tasks in milestone "${task.milestoneId}" are done.\nSuccess criteria: "${milestone.successCriteria}"\n\nYou MUST now verify these criteria by checking actual artifacts, then call evaluate_milestone(milestone_id="${task.milestoneId}", criteria_met=true/false, verification_note="...").`;
+            }
+          }
+        }
+        const responseText = JSON.stringify(task, null, 2) + (criteriaPrompt ?? "");
+        return { content: [{ type: "text", text: responseText }] };
       }
 
       case "update_task_status": {
@@ -267,6 +355,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }),
         });
         return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+      }
+
+      case "evaluate_milestone": {
+        const { milestone_id, criteria_met, verification_note } = args as {
+          milestone_id: string;
+          criteria_met: boolean;
+          verification_note: string;
+        };
+        // Set criteriaMet on the milestone
+        const evaluated = await apiFetch<{ projectId: string; successCriteria?: string }>(`/api/mcp/milestones/${milestone_id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ criteriaMet: criteria_met }),
+        });
+        // Log the verification note to the activity feed
+        const verdict = criteria_met ? "CRITERIA MET" : "CRITERIA NOT MET";
+        await apiFetch("/api/mcp/activities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: evaluated.projectId,
+            description: `[${verdict}] ${milestone_id}: ${verification_note}`,
+          }),
+        });
+        return { content: [{ type: "text", text: JSON.stringify({ ...evaluated, verdict, verification_note }, null, 2) }] };
       }
 
       case "log_progress": {

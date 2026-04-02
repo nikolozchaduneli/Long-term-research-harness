@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readServerState, writeServerState } from "@/lib/server-store";
-import type { AppState, Task } from "@/lib/types";
+import type { AppState, Milestone, Task } from "@/lib/types";
 
 export async function GET() {
   const state = await readServerState();
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       ? {
           ...incoming,
           tasks: mergeTasks(incoming.tasks, existing.tasks),
-          milestones: mergeById(incoming.milestones, existing.milestones),
+          milestones: mergeMilestones(incoming.milestones, existing.milestones),
           activities: mergeById(incoming.activities, existing.activities),
           progressEntries: mergeById(
             incoming.progressEntries,
@@ -46,6 +46,27 @@ function mergeTasks(browser: Task[], server: Task[]): Task[] {
   });
   const browserIds = new Set(browser.map((t) => t.id));
   server.filter((t) => !browserIds.has(t.id)).forEach((t) => result.push(t));
+  return result;
+}
+
+// For milestones: use browser as base but merge in server-side field updates
+// (e.g. successCriteria/criteriaMet set via MCP PATCH).
+function mergeMilestones(browser: Milestone[], server: Milestone[]): Milestone[] {
+  const serverMap = new Map(server.map((m) => [m.id, m]));
+  const result = browser.map((bm) => {
+    const sm = serverMap.get(bm.id);
+    if (!sm) return bm;
+    // Server always wins for criteria fields (set via MCP PATCH / evaluate_milestone).
+    // Browser wins for everything else (title, description, status).
+    return {
+      ...sm,
+      ...bm,
+      successCriteria: sm.successCriteria !== undefined ? sm.successCriteria : bm.successCriteria,
+      criteriaMet: sm.successCriteria !== undefined ? sm.criteriaMet : bm.criteriaMet,
+    };
+  });
+  const browserIds = new Set(browser.map((m) => m.id));
+  server.filter((m) => !browserIds.has(m.id)).forEach((m) => result.push(m));
   return result;
 }
 

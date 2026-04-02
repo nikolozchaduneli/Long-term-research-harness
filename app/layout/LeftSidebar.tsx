@@ -33,6 +33,12 @@ export default function LeftSidebar({ isOpen, onToggle }: LeftSidebarProps) {
     if (!trimmed) return name;
     return trimmed[0].toUpperCase() + trimmed.slice(1);
   };
+  const getCriteriaState = (successCriteria?: string, criteriaMet?: boolean) => {
+    if (!successCriteria?.trim()) return null;
+    return criteriaMet
+      ? { tone: "met" as const, label: "Success criteria met" }
+      : { tone: "unmet" as const, label: "Success criteria unmet" };
+  };
 
   const {
     projects,
@@ -388,53 +394,97 @@ export default function LeftSidebar({ isOpen, onToggle }: LeftSidebarProps) {
                 {milestones
                   .filter((milestone) => milestone.projectId === selectedProject.id)
                   .map((milestone) => (
-                    <div
-                      key={milestone.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        window.dispatchEvent(
-                          new CustomEvent("planning-milestone-select", { detail: milestone.id }),
-                        );
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          window.dispatchEvent(
-                            new CustomEvent("planning-milestone-select", { detail: milestone.id }),
-                          );
-                        }
-                      }}
-                      className={`group flex items-start gap-3 rounded-r-lg border-l-[3px] py-2.5 pr-2.5 pl-3 text-sm transition cursor-pointer hover:bg-[var(--bg-hover)] ${milestone.status === "completed"
-                        ? "border-transparent opacity-60"
-                        : planningMilestoneId === milestone.id
-                          ? "border-[var(--accent)] bg-[rgba(76,143,132,0.12)]"
-                          : "border-transparent"
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={milestone.status === "completed"}
-                        onChange={(e) =>
-                          updateMilestoneStatus(
-                            milestone.id,
-                            e.target.checked ? "completed" : "active",
-                          )
-                        }
-                        onClick={(event) => event.stopPropagation()}
-                        className="mt-0.5 rounded border-[var(--border-medium)] text-[var(--accent)]"
-                      />
-                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                        <span className={`min-w-0 line-clamp-1 ${milestone.status === "completed" ? "line-through opacity-70" : ""}`}>
-                          {milestone.title}
-                        </span>
-                        {planningMilestoneId === milestone.id && (
-                          <span className="shrink-0 rounded-full bg-[rgba(76,143,132,0.16)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--accent)]">
-                            Active
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    (() => {
+                      const criteriaState = getCriteriaState(
+                        milestone.successCriteria,
+                        milestone.criteriaMet,
+                      );
+                      const completionBlocked =
+                        milestone.status !== "completed" && criteriaState?.tone === "unmet";
+                      return (
+                        <div
+                          key={milestone.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent("planning-milestone-select", { detail: milestone.id }),
+                            );
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              window.dispatchEvent(
+                                new CustomEvent("planning-milestone-select", { detail: milestone.id }),
+                              );
+                            }
+                          }}
+                          className={`group flex items-start gap-3 rounded-r-lg border-l-[3px] py-2.5 pr-2.5 pl-3 text-sm transition cursor-pointer hover:bg-[var(--bg-hover)] ${milestone.status === "completed"
+                            ? "border-transparent opacity-60"
+                            : planningMilestoneId === milestone.id
+                              ? "border-[var(--accent)] bg-[rgba(76,143,132,0.12)]"
+                              : "border-transparent"
+                            }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={milestone.status === "completed"}
+                            disabled={completionBlocked}
+                            title={
+                              completionBlocked
+                                ? "Mark the success criteria as met before completing this milestone."
+                                : undefined
+                            }
+                            onChange={(e) =>
+                              updateMilestoneStatus(
+                                milestone.id,
+                                e.target.checked ? "completed" : "active",
+                              )
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                            className="mt-0.5 rounded border-[var(--border-medium)] text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                            <span className={`min-w-0 line-clamp-1 ${milestone.status === "completed" ? "line-through opacity-70" : ""}`}>
+                              {milestone.title}
+                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              {criteriaState && (
+                                <span
+                                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
+                                    criteriaState.tone === "met"
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-amber-500 text-transparent"
+                                  }`}
+                                  title={criteriaState.label}
+                                  aria-label={criteriaState.label}
+                                >
+                                  {criteriaState.tone === "met" ? (
+                                    <svg
+                                      width="10"
+                                      height="10"
+                                      viewBox="0 0 12 12"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M2 6.5 4.5 9 10 3" />
+                                    </svg>
+                                  ) : null}
+                                </span>
+                              )}
+                              {planningMilestoneId === milestone.id && (
+                                <span className="shrink-0 rounded-full bg-[rgba(76,143,132,0.16)] px-1.5 py-0.5 text-[9px] font-semibold text-[var(--accent)]">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
                   ))}
               </div>
               <div className="mt-1">

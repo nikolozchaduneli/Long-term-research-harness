@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { loadState, saveState } from "@/lib/storage";
 import { getInitialState, useAppStore } from "@/lib/store";
-import type { AppState, Task } from "@/lib/types";
+import type { AppState, Milestone, Task } from "@/lib/types";
 import AppShell from "@/app/layout/AppShell";
 
 export default function Home() {
@@ -95,11 +95,22 @@ export default function Home() {
           .filter((p) => !serverPlanIds.has(p.id))
           .forEach((p) => mergedPlans.push(p));
 
-        // Milestones: append server-only
-        const milestoneIds = new Set(current.milestones.map((m) => m.id));
-        const newMilestones = server.milestones.filter(
-          (m) => !milestoneIds.has(m.id),
-        );
+        // Milestones: merge server updates into existing, append new
+        const serverMilestoneMap = new Map(server.milestones.map((m) => [m.id, m]));
+        const mergedMilestones: Milestone[] = current.milestones.map((bm) => {
+          const sm = serverMilestoneMap.get(bm.id);
+          if (!sm) return bm;
+          // Server wins for criteria fields; browser wins for the rest
+          const scChanged = sm.successCriteria !== bm.successCriteria;
+          const cmChanged = sm.criteriaMet !== bm.criteriaMet;
+          const statusChanged = sm.status !== bm.status;
+          if (!scChanged && !cmChanged && !statusChanged) return bm;
+          return { ...bm, successCriteria: sm.successCriteria, criteriaMet: sm.criteriaMet, status: sm.status };
+        });
+        const browserMilestoneIds = new Set(current.milestones.map((m) => m.id));
+        server.milestones
+          .filter((m) => !browserMilestoneIds.has(m.id))
+          .forEach((m) => mergedMilestones.push(m));
 
         return {
           tasks: mergedTasks,
@@ -107,9 +118,7 @@ export default function Home() {
             ? [...newActivities, ...current.activities]
             : current.activities,
           dailyPlans: mergedPlans,
-          milestones: newMilestones.length
-            ? [...current.milestones, ...newMilestones]
-            : current.milestones,
+          milestones: mergedMilestones,
         };
       });
     });

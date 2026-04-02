@@ -54,6 +54,8 @@ export type Milestone = {
   projectId: string;
   title: string;
   description?: string;
+  successCriteria?: string;
+  criteriaMet?: boolean;
   status: "active" | "completed";
   createdAt: string;
 };

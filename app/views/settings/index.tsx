@@ -58,6 +58,7 @@ export default function ProjectSettingsView() {
   const setThemeScheme = useAppStore((state) => state.setThemeScheme);
   const createMilestone = useAppStore((state) => state.createMilestone);
   const updateMilestone = useAppStore((state) => state.updateMilestone);
+  const setMilestoneCriteriaMet = useAppStore((state) => state.setMilestoneCriteriaMet);
   const deleteMilestone = useAppStore((state) => state.deleteMilestone);
   const moveMilestone = useAppStore((state) => state.moveMilestone);
   const addActivity = useAppStore((state) => state.addActivity);
@@ -427,6 +428,7 @@ export default function ProjectSettingsView() {
               milestones={projectMilestones}
               onMove={moveMilestone}
               onUpdate={updateMilestone}
+              onSetCriteriaMet={setMilestoneCriteriaMet}
               onDelete={deleteMilestone}
               autoEditMilestoneId={milestoneEditTargetId}
               highlightMilestoneId={milestoneEditTargetId}

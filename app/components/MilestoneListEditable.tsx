@@ -6,8 +6,9 @@ type MilestoneListEditableProps = {
   onMove: (id: string, direction: "up" | "down") => void;
   onUpdate: (
     id: string,
-    data: { title: string; description?: string },
+    data: { title: string; description?: string; successCriteria?: string },
   ) => void;
+  onSetCriteriaMet: (id: string, met: boolean) => void;
   onDelete: (id: string) => void;
   autoEditMilestoneId?: string | null;
   highlightMilestoneId?: string | null;
@@ -24,6 +25,7 @@ export default function MilestoneListEditable({
   milestones,
   onMove,
   onUpdate,
+  onSetCriteriaMet,
   onDelete,
   autoEditMilestoneId,
   highlightMilestoneId,
@@ -39,6 +41,9 @@ export default function MilestoneListEditable({
   );
   const [editingMilestoneDescription, setEditingMilestoneDescription] = useState(
     initialAutoEditMilestone?.description ?? "",
+  );
+  const [editingMilestoneSuccessCriteria, setEditingMilestoneSuccessCriteria] = useState(
+    initialAutoEditMilestone?.successCriteria ?? "",
   );
 
   if (milestones.length === 0) {
@@ -87,6 +92,7 @@ export default function MilestoneListEditable({
                       onUpdate(milestone.id, {
                         title: editingMilestoneTitle,
                         description: editingMilestoneDescription,
+                        successCriteria: editingMilestoneSuccessCriteria,
                       });
                       setEditingMilestoneId(null);
                     }
@@ -103,12 +109,20 @@ export default function MilestoneListEditable({
                   placeholder="Concise milestone description"
                   className="rounded-xl border border-[var(--border-medium)] bg-white px-3 py-2 text-sm text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                 />
+                <textarea
+                  rows={2}
+                  value={editingMilestoneSuccessCriteria}
+                  onChange={(e) => setEditingMilestoneSuccessCriteria(e.target.value)}
+                  placeholder="Success criteria to complete this milestone"
+                  className="rounded-xl border border-[var(--border-medium)] bg-white px-3 py-2 text-sm text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                />
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => {
                       onUpdate(milestone.id, {
                         title: editingMilestoneTitle,
                         description: editingMilestoneDescription,
+                        successCriteria: editingMilestoneSuccessCriteria,
                       });
                       setEditingMilestoneId(null);
                     }}
@@ -132,6 +146,46 @@ export default function MilestoneListEditable({
                   <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">
                     {milestone.description?.trim() || "No description yet."}
                   </p>
+                  {milestone.successCriteria?.trim() && (
+                    <div className="mt-2 grid gap-1">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">
+                        Success criteria
+                      </p>
+                      <p className="text-sm text-[var(--ink)]">{milestone.successCriteria}</p>
+                      <button
+                        type="button"
+                        onClick={() => onSetCriteriaMet(milestone.id, milestone.criteriaMet !== true)}
+                        className={`inline-flex w-fit items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                          milestone.criteriaMet
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-4 w-4 items-center justify-center rounded-full ${
+                            milestone.criteriaMet ? "bg-emerald-600 text-white" : "bg-amber-500"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {milestone.criteriaMet ? (
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 12 12"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M2 6.5 4.5 9 10 3" />
+                            </svg>
+                          ) : null}
+                        </span>
+                        {milestone.criteriaMet ? "Criteria met" : "Criteria unmet"}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
@@ -139,6 +193,7 @@ export default function MilestoneListEditable({
                       setEditingMilestoneId(milestone.id);
                       setEditingMilestoneTitle(milestone.title);
                       setEditingMilestoneDescription(milestone.description ?? "");
+                      setEditingMilestoneSuccessCriteria(milestone.successCriteria ?? "");
                     }}
                     className={styles.iconButton}
                     title="Edit milestone"

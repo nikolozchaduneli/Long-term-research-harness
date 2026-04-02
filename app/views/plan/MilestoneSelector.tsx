@@ -58,13 +58,21 @@ export default function MilestoneSelector({
   aiPromptRef,
 }: MilestoneSelectorProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const getCriteriaState = (milestone?: Milestone) => {
+    if (!milestone?.successCriteria?.trim()) return null;
+    return milestone.criteriaMet
+      ? { tone: "met" as const, label: "Success criteria met" }
+      : { tone: "unmet" as const, label: "Success criteria unmet" };
+  };
+  const selectedMilestone = useMemo(
+    () => projectMilestones.find((milestone) => milestone.id === selectedMilestoneId),
+    [projectMilestones, selectedMilestoneId],
+  );
+  const selectedCriteriaState = getCriteriaState(selectedMilestone);
   const selectedLabel = useMemo(() => {
     if (!selectedMilestoneId) return "Whole Project";
-    return (
-      projectMilestones.find((milestone) => milestone.id === selectedMilestoneId)?.title ??
-      "Whole Project"
-    );
-  }, [projectMilestones, selectedMilestoneId]);
+    return selectedMilestone?.title ?? "Whole Project";
+  }, [selectedMilestone, selectedMilestoneId]);
 
   useEffect(() => {
     if (!isDropdownOpen) return;
@@ -96,8 +104,33 @@ export default function MilestoneSelector({
               aria-haspopup="listbox"
               aria-expanded={isDropdownOpen}
             >
-              <span className="min-w-0 flex-1 break-words whitespace-normal">
-                {selectedLabel}
+              <span className="flex min-w-0 flex-1 items-center gap-2 break-words whitespace-normal">
+                {selectedMilestone && selectedCriteriaState && (
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] ${
+                      selectedCriteriaState.tone === "met"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-amber-500 text-transparent"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {selectedCriteriaState.tone === "met" ? (
+                      <svg
+                        width="9"
+                        height="9"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M2 6.5 4.5 9 10 3" />
+                      </svg>
+                    ) : null}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 break-words whitespace-normal">{selectedLabel}</span>
               </span>
               <svg
                 width="14"
@@ -140,27 +173,58 @@ export default function MilestoneSelector({
                   )}
                 </button>
                 {projectMilestones.map((milestone) => (
-                  <button
-                    key={milestone.id}
-                    type="button"
-                    role="option"
-                    aria-selected={selectedMilestoneId === milestone.id}
-                    className="flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-sm text-[var(--ink)] transition hover:bg-[var(--panel)]"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      setSelectedMilestoneId(milestone.id);
-                      setIsDropdownOpen(false);
-                    }}
-                  >
-                    <span className="min-w-0 flex-1 break-words whitespace-normal">
-                      {milestone.title}
-                    </span>
-                    {selectedMilestoneId === milestone.id && (
-                      <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Active
-                      </span>
-                    )}
-                  </button>
+                  (() => {
+                    const criteriaState = getCriteriaState(milestone);
+                    return (
+                      <button
+                        key={milestone.id}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedMilestoneId === milestone.id}
+                        className="flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-sm text-[var(--ink)] transition hover:bg-[var(--panel)]"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setSelectedMilestoneId(milestone.id);
+                          setIsDropdownOpen(false);
+                        }}
+                      >
+                        {criteriaState && (
+                          <span
+                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] ${
+                              criteriaState.tone === "met"
+                                ? "bg-emerald-600 text-white"
+                                : "bg-amber-500 text-transparent"
+                            }`}
+                            title={criteriaState.label}
+                            aria-label={criteriaState.label}
+                          >
+                            {criteriaState.tone === "met" ? (
+                              <svg
+                                width="9"
+                                height="9"
+                                viewBox="0 0 12 12"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M2 6.5 4.5 9 10 3" />
+                              </svg>
+                            ) : null}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1 break-words whitespace-normal">
+                          {milestone.title}
+                        </span>
+                        {selectedMilestoneId === milestone.id && (
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                            Active
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })()
                 ))}
               </div>
             )}

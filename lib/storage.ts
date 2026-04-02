@@ -32,6 +32,12 @@ const normalizeState = (state: AppState): AppState => {
   return {
     ...state,
     dailyPlans: migratedPlans,
+    milestones: state.milestones.map((milestone) => {
+      if (milestone.successCriteria && typeof milestone.criteriaMet !== "boolean") {
+        return { ...milestone, criteriaMet: false };
+      }
+      return milestone;
+    }),
     ui: {
       ...state.ui,
       themeScheme: nextThemeScheme,

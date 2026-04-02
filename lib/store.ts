@@ -52,11 +52,17 @@ type StoreActions = {
   attachTasksToPlan: (date: string, projectId: string, taskIds: string[]) => void;
   setLastTranscript: (value?: string) => void;
   setLastVoicePrompt: (value?: string) => void;
-  createMilestone: (projectId: string, title: string, description?: string) => void;
+  createMilestone: (
+    projectId: string,
+    title: string,
+    description?: string,
+    successCriteria?: string,
+  ) => void;
   updateMilestoneStatus: (id: string, status: "active" | "completed") => void;
+  setMilestoneCriteriaMet: (id: string, met: boolean) => void;
   updateMilestone: (
     id: string,
-    data: Partial<Pick<Milestone, "title" | "description">>,
+    data: Partial<Pick<Milestone, "title" | "description" | "successCriteria" | "criteriaMet">>,
   ) => void;
   deleteMilestone: (id: string) => void;
   moveMilestone: (id: string, direction: "up" | "down") => void;
@@ -275,13 +281,16 @@ export const useAppStore = create<AppState & StoreActions>((set, get) => ({
     set((state) => ({ ui: { ...state.ui, lastTranscript: value } })),
   setLastVoicePrompt: (value) =>
     set((state) => ({ ui: { ...state.ui, lastVoicePrompt: value } })),
-  createMilestone: (projectId, title, description) =>
+  createMilestone: (projectId, title, description, successCriteria) =>
     set((state) => {
+      const normalizedSuccessCriteria = successCriteria?.trim() || undefined;
       const milestone: Milestone = {
         id: crypto.randomUUID(),
         projectId,
         title,
         description: description?.trim() || undefined,
+        successCriteria: normalizedSuccessCriteria,
+        criteriaMet: normalizedSuccessCriteria ? false : undefined,
         status: "active",
         createdAt: new Date().toISOString(),
       };
@@ -289,22 +298,55 @@ export const useAppStore = create<AppState & StoreActions>((set, get) => ({
     }),
   updateMilestoneStatus: (id, status) =>
     set((state) => {
-      const next = state.milestones.map((m) =>
-        m.id === id ? { ...m, status } : m,
-      );
+      const next = state.milestones.map((m) => {
+        if (m.id !== id) {
+          return m;
+        }
+        if (status === "completed" && m.successCriteria && m.criteriaMet !== true) {
+          return m;
+        }
+        return { ...m, status };
+      });
       return { milestones: next };
     }),
+  setMilestoneCriteriaMet: (id, met) =>
+    set((state) => ({
+      milestones: state.milestones.map((milestone) => {
+        if (milestone.id !== id || !milestone.successCriteria) {
+          return milestone;
+        }
+        return { ...milestone, criteriaMet: met };
+      }),
+    })),
   updateMilestone: (id, data) =>
     set((state) => {
       const next = state.milestones.map((m) =>
         m.id === id
           ? {
-            ...m,
-            ...(typeof data.title === "string" ? { title: data.title } : {}),
-            ...(typeof data.description === "string"
-              ? { description: data.description.trim() || undefined }
-              : {}),
-          }
+              ...m,
+              ...(typeof data.title === "string" ? { title: data.title } : {}),
+              ...(typeof data.description === "string"
+                ? { description: data.description.trim() || undefined }
+                : {}),
+              ...(typeof data.successCriteria === "string"
+                ? {
+                    successCriteria: data.successCriteria.trim() || undefined,
+                    criteriaMet:
+                      data.successCriteria.trim()
+                        ? typeof data.criteriaMet === "boolean"
+                          ? data.criteriaMet
+                          : m.successCriteria
+                            ? m.criteriaMet ?? false
+                            : false
+                        : undefined,
+                  }
+                : {}),
+              ...(typeof data.successCriteria !== "string" &&
+              typeof data.criteriaMet === "boolean" &&
+              m.successCriteria
+                ? { criteriaMet: data.criteriaMet }
+                : {}),
+            }
           : m,
       );
       return { milestones: next };
