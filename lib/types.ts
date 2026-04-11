@@ -71,14 +71,21 @@ export type BrainstormMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  thinkingText?: string;
   options?: string[];
   timestamp: string;
+};
+
+export type BrainstormMilestone = {
+  title: string;
+  description?: string;
+  successCriteria?: string;
 };
 
 export type BrainstormDraft = {
   name: string;
   goal: string;
-  milestones: string[];
+  milestones: BrainstormMilestone[];
   constraints: string[];
   isReady: boolean;
 };

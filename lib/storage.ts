@@ -29,6 +29,15 @@ const normalizeState = (state: AppState): AppState => {
   const nextThemeScheme = THEME_SCHEMES.has(state.ui.themeScheme)
     ? state.ui.themeScheme
     : "sage";
+  const normalizedDraft = state.activeDraft
+    ? {
+        ...state.activeDraft,
+        milestones: (state.activeDraft.milestones || []).map((m: unknown) =>
+          typeof m === "string" ? { title: m } : m,
+        ),
+      }
+    : undefined;
+
   return {
     ...state,
     dailyPlans: migratedPlans,
@@ -38,6 +47,7 @@ const normalizeState = (state: AppState): AppState => {
       }
       return milestone;
     }),
+    activeDraft: normalizedDraft as AppState["activeDraft"],
     ui: {
       ...state.ui,
       themeScheme: nextThemeScheme,

@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isConfigured, callAi, extractJson } from "@/lib/ai-provider";
+
+const milestoneObjectSchema = z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    successCriteria: z.string().optional(),
+});
 
 const requestSchema = z.object({
     messages: z.array(z.object({
@@ -9,7 +16,7 @@ const requestSchema = z.object({
     currentDraft: z.object({
         name: z.string().optional(),
         goal: z.string().optional(),
-        milestones: z.array(z.string()).optional(),
+        milestones: z.array(z.union([z.string(), milestoneObjectSchema])).optional(),
         constraints: z.array(z.string()).optional(),
         isReady: z.boolean().optional()
     }).optional()
@@ -21,7 +28,7 @@ const responseSchema = z.object({
     updatedDraft: z.object({
         name: z.string().optional(),
         goal: z.string().optional(),
-        milestones: z.array(z.string()).optional(),
+        milestones: z.array(milestoneObjectSchema).optional(),
         constraints: z.array(z.string()).optional(),
         isReady: z.boolean().optional()
     })
@@ -44,52 +51,23 @@ YOUR CORE MISSION:
 MILESTONE RULES:
 - Milestones should be CONCRETE DELIVERABLES.
 - If you have enough info, GENERATE the milestones yourself and ask if they look good, rather than asking the user to define them.
+- Each milestone MUST be an object with: "title" (required), "description" (1-2 sentence scope summary), and "successCriteria" (a clear, testable condition for completion).
 
-OUTPUT FORMAT:
+OUTPUT FORMAT — you MUST return valid JSON and nothing else:
 {
   "message": "Friendly response. If isReady is true, tell the user the project is ready to build!",
-  "options": ["Choice A", "Choice B", "Choice C"], // Empty if isReady: true
-  "updatedDraft": { ... }
+  "options": ["Choice A", "Choice B", "Choice C"],
+  "updatedDraft": {
+    "milestones": [
+      {
+        "title": "Core MVP",
+        "description": "Basic working version with essential features",
+        "successCriteria": "Users can create, edit, and delete items end-to-end"
+      }
+    ]
+  }
 }
 `;
-};
-
-const extractJson = (content: string) => {
-    try {
-        return JSON.parse(content);
-    } catch (error) {
-        const start = content.indexOf("{");
-        const end = content.lastIndexOf("}");
-        if (start >= 0 && end > start) {
-            const slice = content.slice(start, end + 1);
-            return JSON.parse(slice);
-        }
-        throw error;
-    }
-};
-
-const getOutputText = (data: unknown) => {
-    if (!data || typeof data !== "object") return null;
-    const outputText = (data as { output_text?: unknown }).output_text;
-    if (typeof outputText === "string") return outputText;
-    const output = (data as { output?: unknown }).output;
-    if (!Array.isArray(output)) return null;
-    for (const item of output) {
-        if (!item || typeof item !== "object") continue;
-        const content = (item as { content?: unknown }).content;
-        if (!Array.isArray(content)) continue;
-        const textParts = content
-            .map((part) => {
-                const textValue = (part as { text?: unknown }).text;
-                if (typeof textValue === "string") return textValue;
-                const optText = (part as { output_text?: unknown }).output_text;
-                if (typeof optText === "string") return optText;
-                return null;
-            })
-            .filter(Boolean);
-        if (textParts.length > 0) return textParts.join("");
-    }
-    return null;
 };
 
 export async function POST(request: Request) {
@@ -100,69 +78,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-    const apiVersion = process.env.AZURE_OPENAI_API_VERSION || "2024-10-21";
-
-    if (!endpoint || !apiKey || !deployment) {
+    if (!isConfigured()) {
         return NextResponse.json({
             message: "AI configuration missing. I'm operating in offline mode. How can I help?",
             updatedDraft: parsed.data.currentDraft || { name: "", goal: "", milestones: [], constraints: [] }
         });
     }
-
-    const normalize = (value: string) =>
-        value
-            .trim()
-            .replace(/^"+|"+$/g, "")
-            .replace(/^'+|'+$/g, "");
-
-    const normalizedEndpoint = endpoint
-        ? normalize(endpoint).replace(/\/+$/, "").replace(/\/openai\/.*$/, "")
-        : null;
-
-    const responsesUrl = process.env.AZURE_OPENAI_RESPONSES_URL;
-    const normalizedResponsesUrl = responsesUrl
-        ? normalize(responsesUrl).replace(/\/+$/, "")
-        : null;
-
-    const requestUrl = normalizedResponsesUrl
-        ? normalizedResponsesUrl.includes("api-version=")
-            ? normalizedResponsesUrl
-            : `${normalizedResponsesUrl}?api-version=${apiVersion}`
-        : `${normalizedEndpoint}/openai/deployments/${deployment}/responses?api-version=${apiVersion}`;
-
-    const schema = {
-        name: "brainstorm_response",
-        strict: false,
-        schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-                message: { type: "string" },
-                options: {
-                    type: "array",
-                    items: { type: "string" },
-                    minItems: 0,
-                    maxItems: 3
-                },
-                updatedDraft: {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                        name: { type: "string" },
-                        goal: { type: "string" },
-                        milestones: { type: "array", items: { type: "string" } },
-                        constraints: { type: "array", items: { type: "string" } },
-                        isReady: { type: "boolean" }
-                    },
-                    required: [] // Removing required to allow partial updates in non-strict schema
-                }
-            },
-            required: ["message", "options", "updatedDraft"]
-        }
-    };
 
     const conversationContext = parsed.data.messages
         .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
@@ -172,47 +93,24 @@ export async function POST(request: Request) {
     const draftContext = parsed.data.currentDraft ? `CURRENT DRAFT: ${JSON.stringify(parsed.data.currentDraft)}` : "NO DRAFT YET";
 
     try {
-        console.log("Brainstorm Requesting:", requestUrl);
-        const response = await fetch(requestUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "api-key": apiKey,
-            },
-            body: JSON.stringify({
-                instructions: buildSystemPrompt(turnCount),
-                input: `${draftContext}\n\nCONVERSATION HISTORY:\n${conversationContext}`,
-                model: deployment,
-                temperature: 0.7,
-                text: {
-                    format: {
-                        type: "json_schema",
-                        name: schema.name,
-                        strict: false, // Changed to false to allow partial updates
-                        schema: schema.schema,
-                    },
-                },
-            }),
+        const result = await callAi({
+            system: buildSystemPrompt(turnCount),
+            userContent: `${draftContext}\n\nCONVERSATION HISTORY:\n${conversationContext}`,
+            maxTokens: 16384,
         });
 
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error("Brainstorm API Error:", response.status, errorBody);
-            return NextResponse.json({
-                message: "Thinking hard... but I hit a snag. Let's try that again.",
-                updatedDraft: parsed.data.currentDraft || { name: "", goal: "", milestones: [], constraints: [], isReady: false }
-            });
-        }
-
-        const data = await response.json();
-        const content = getOutputText(data);
+        const content = result.text;
+        const thinkingText = result.thinkingText;
         if (!content) throw new Error("No content in response");
 
-        const result = extractJson(content);
-        const validated = responseSchema.safeParse(result);
+        const parsed_result = extractJson(content);
+        const validated = responseSchema.safeParse(parsed_result);
         if (!validated.success) throw new Error("Invalid output format");
 
-        return NextResponse.json(validated.data);
+        return NextResponse.json({
+            ...validated.data,
+            thinkingText: thinkingText || undefined,
+        });
     } catch (err) {
         console.error("Brainstorm error", err);
         return NextResponse.json({

@@ -5,6 +5,8 @@ import { useShallow } from "zustand/react/shallow";
 import DictationMic from "@/app/components/DictationMic";
 import useBrainstorm from "@/app/hooks/useBrainstorm";
 import useVoiceRecording from "@/app/hooks/useVoiceRecording";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function BrainstormView() {
   const {
@@ -80,13 +82,34 @@ export default function BrainstormView() {
             {brainstormMessages.map((msg) => (
               <div
                 key={msg.id}
-                className={`max-w-[85%] rounded-[24px] p-5 text-[15px] leading-relaxed shadow-sm transition-all ${
+                className={`max-w-[85%] min-w-0 overflow-hidden rounded-[24px] p-5 text-[15px] leading-relaxed shadow-sm transition-all ${
                   msg.role === "user"
                     ? "self-end bg-[var(--accent)] text-white"
                     : "self-start bg-white border border-[rgba(31,45,43,0.06)] text-[var(--ink)]"
                 }`}
               >
-                {msg.content}
+                {msg.role === "assistant" && msg.thinkingText && (
+                  <details className="mb-3 rounded-xl bg-[var(--panel)] border border-[var(--border-subtle)] text-xs">
+                    <summary className="cursor-pointer px-3 py-2 font-semibold text-[var(--muted)] select-none flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 transition-transform [details[open]>&]:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                      Thinking
+                    </summary>
+                    <div className="px-3 pb-3 text-[var(--muted)] leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                      {msg.thinkingText}
+                    </div>
+                  </details>
+                )}
+                {msg.role === "assistant" ? (
+                  <div className="brainstorm-prose min-w-0 overflow-hidden">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  msg.content
+                )}
               </div>
             ))}
 
@@ -217,17 +240,36 @@ export default function BrainstormView() {
                     Proposed Milestones
                   </label>
                   <div className="flex flex-col gap-2">
-                    {activeDraft.milestones.map((milestone, i) => (
-                      <div
-                        key={milestone}
-                        className="flex gap-3 items-start text-xs bg-white/80 p-3 rounded-[16px] border border-white/60 shadow-sm transition-all hover:translate-x-1"
-                      >
-                        <span className="flex-shrink-0 w-4 h-4 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center font-bold">
-                          {i + 1}
-                        </span>
-                        {milestone}
-                      </div>
-                    ))}
+                    {activeDraft.milestones.map((raw, i) => {
+                      const m = typeof raw === "string" ? { title: raw } : raw;
+                      return (
+                        <div
+                          key={m.title}
+                          className="flex flex-col gap-1.5 text-xs bg-white/80 p-3 rounded-[16px] border border-white/60 shadow-sm transition-all hover:translate-x-1"
+                        >
+                          <div className="flex gap-3 items-start">
+                            <span className="flex-shrink-0 w-4 h-4 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center font-bold">
+                              {i + 1}
+                            </span>
+                            <span className="font-semibold">{m.title}</span>
+                          </div>
+                          {m.description && (
+                            <p className="text-[var(--muted)] pl-7 leading-relaxed">
+                              {m.description}
+                            </p>
+                          )}
+                          {m.successCriteria && (
+                            <div className="flex items-start gap-1.5 pl-7 text-[10px] text-[var(--success)] font-medium">
+                              <svg className="w-3 h-3 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
+                              </svg>
+                              {m.successCriteria}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

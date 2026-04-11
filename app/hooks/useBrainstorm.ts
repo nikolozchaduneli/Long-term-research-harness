@@ -31,7 +31,7 @@ export default function useBrainstorm() {
     if (!content) return;
 
     setBrainstormInput("");
-    addBrainstormMessage("user", content);
+    addBrainstormMessage({ role: "user", content });
     setIsBrainstorming(true);
 
     try {
@@ -47,16 +47,21 @@ export default function useBrainstorm() {
       if (!response.ok) {
         throw new Error(data?.error || "Brainstorm failed");
       }
-      addBrainstormMessage("assistant", data.message, data.options);
+      addBrainstormMessage({
+        role: "assistant",
+        content: data.message,
+        thinkingText: data.thinkingText,
+        options: data.options,
+      });
       if (data.updatedDraft) {
         updateActiveDraft(data.updatedDraft);
       }
     } catch (err) {
       console.error("Brainstorm error", err);
-      addBrainstormMessage(
-        "assistant",
-        "I hit a snag in my thinking process. Could you say that again?",
-      );
+      addBrainstormMessage({
+        role: "assistant",
+        content: "I hit a snag in my thinking process. Could you say that again?",
+      });
     } finally {
       setIsBrainstorming(false);
     }

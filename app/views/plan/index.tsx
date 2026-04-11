@@ -457,6 +457,44 @@ export default function PlanView() {
         </div>
       </div>
 
+      {selectedMilestone?.successCriteria && (
+        <div
+          className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+            selectedMilestone.criteriaMet
+              ? "border-emerald-200 bg-emerald-50/60"
+              : "border-amber-200 bg-amber-50/60"
+          }`}
+        >
+          <span
+            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white ${
+              selectedMilestone.criteriaMet ? "bg-emerald-600" : "bg-amber-500"
+            }`}
+          >
+            {selectedMilestone.criteriaMet ? (
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 6.5 4.5 9 10 3" />
+              </svg>
+            ) : (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
+              selectedMilestone.criteriaMet ? "text-emerald-700" : "text-amber-700"
+            }`}>
+              Success Criteria {selectedMilestone.criteriaMet ? "Met" : "Pending"}
+            </p>
+            <p className={`mt-0.5 text-[13px] leading-relaxed ${
+              selectedMilestone.criteriaMet ? "text-emerald-900/80" : "text-amber-900/80"
+            }`}>
+              {selectedMilestone.successCriteria}
+            </p>
+          </div>
+        </div>
+      )}
+
       {!selectedProject && (
         <div className="rounded-2xl border border-dashed border-[rgba(31,45,43,0.2)] p-6 text-sm text-[var(--muted)]">
           Select a project to build a plan.

@@ -55,6 +55,7 @@ export default function ProjectSettingsView() {
   const ui = useAppStore((state) => state.ui);
   const milestones = useAppStore((state) => state.milestones);
   const setSelectedProject = useAppStore((state) => state.setSelectedProject);
+  const deleteProject = useAppStore((state) => state.deleteProject);
   const setThemeScheme = useAppStore((state) => state.setThemeScheme);
   const createMilestone = useAppStore((state) => state.createMilestone);
   const updateMilestone = useAppStore((state) => state.updateMilestone);
@@ -79,6 +80,7 @@ export default function ProjectSettingsView() {
   const [milestoneRegenMessage, setMilestoneRegenMessage] = useState<string | null>(null);
   const [milestoneEditTargetId, setMilestoneEditTargetId] = useState<string | null>(null);
   const [milestoneEditToken, setMilestoneEditToken] = useState(0);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     const handleOpenMilestones = (event: Event) => {
@@ -310,6 +312,49 @@ export default function ProjectSettingsView() {
               >
                 Start New Project
               </button>
+              {confirmingDelete ? (
+                <span className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                  <span className="text-xs text-red-600 font-medium">Delete this project?</span>
+                  <button
+                    onClick={() => {
+                      deleteProject(selectedProject.id);
+                      setConfirmingDelete(false);
+                    }}
+                    className="rounded-full bg-red-600 px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] text-white shadow-sm transition hover:-translate-y-0.5"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDelete(false)}
+                    className="rounded-full border border-[var(--border-medium)] bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] text-[var(--muted)] shadow-sm transition hover:-translate-y-0.5"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  title="Delete project"
+                  aria-label="Delete project"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-red-200 bg-white text-red-400 shadow-sm transition hover:-translate-y-0.5 hover:text-red-600 hover:border-red-400"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
 

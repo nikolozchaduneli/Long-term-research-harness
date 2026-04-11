@@ -66,9 +66,15 @@ type StoreActions = {
   ) => void;
   deleteMilestone: (id: string) => void;
   moveMilestone: (id: string, direction: "up" | "down") => void;
+  deleteProject: (projectId: string) => void;
   updateProject: (projectId: string, data: Partial<Omit<Project, "id" | "createdAt" | "updatedAt">>) => void;
   addActivity: (projectId: string, description: string) => void;
-  addBrainstormMessage: (role: "user" | "assistant", content: string, options?: string[]) => void;
+  addBrainstormMessage: (msg: {
+    role: "user" | "assistant";
+    content: string;
+    thinkingText?: string;
+    options?: string[];
+  }) => void;
   updateActiveDraft: (draft: Partial<BrainstormDraft>) => void;
   clearBrainstorm: () => void;
   promoteDraftToProject: () => void;
@@ -133,6 +139,20 @@ export const useAppStore = create<AppState & StoreActions>((set, get) => ({
       next[index] = project;
       return { projects: next };
     }),
+  deleteProject: (projectId) =>
+    set((state) => ({
+      projects: state.projects.filter((p) => p.id !== projectId),
+      tasks: state.tasks.filter((t) => t.projectId !== projectId),
+      milestones: state.milestones.filter((m) => m.projectId !== projectId),
+      activities: state.activities.filter((a) => a.projectId !== projectId),
+      dailyPlans: state.dailyPlans.filter((p) => p.projectId !== projectId),
+      ui: {
+        ...state.ui,
+        selectedProjectId: state.ui.selectedProjectId === projectId
+          ? undefined
+          : state.ui.selectedProjectId,
+      },
+    })),
   updateProject: (projectId, data) =>
     set((state) => {
       const next = state.projects.map((p) =>
@@ -392,20 +412,29 @@ export const useAppStore = create<AppState & StoreActions>((set, get) => ({
       };
       return { activities: [activity, ...state.activities] };
     }),
-  addBrainstormMessage: (role, content, options) =>
+  addBrainstormMessage: (msg) =>
     set((state) => ({
       brainstormMessages: [
         ...state.brainstormMessages,
-        { id: crypto.randomUUID(), role, content, options, timestamp: new Date().toISOString() },
+        {
+          id: crypto.randomUUID(),
+          role: msg.role,
+          content: msg.content,
+          thinkingText: msg.thinkingText,
+          options: msg.options,
+          timestamp: new Date().toISOString(),
+        },
       ],
     })),
   updateActiveDraft: (draft) =>
-    set((state) => ({
-      activeDraft: {
-        ...(state.activeDraft || { name: "", goal: "", milestones: [], constraints: [], isReady: false }),
-        ...draft,
-      },
-    })),
+    set((state) => {
+      const base = state.activeDraft || { name: "", goal: "", milestones: [], constraints: [], isReady: false };
+      const merged = { ...base, ...draft };
+      merged.milestones = merged.milestones.map((m) =>
+        typeof m === "string" ? { title: m } : m,
+      );
+      return { activeDraft: merged };
+    }),
   clearBrainstorm: () =>
     set(() => ({
       brainstormMessages: [],
@@ -425,7 +454,8 @@ export const useAppStore = create<AppState & StoreActions>((set, get) => ({
     });
 
     activeDraft.milestones.forEach((m) => {
-      createMilestone(project.id, m);
+      const ms = typeof m === "string" ? { title: m } : m;
+      createMilestone(project.id, ms.title, ms.description, ms.successCriteria);
     });
 
     clearBrainstorm();
