@@ -34,15 +34,20 @@ node scripts/record-ui/gif-plan-tasks.js      # gif-02-plan-tasks.gif
 node scripts/record-ui/gif-focus-prompt.js    # gif-03-focus-prompt.gif
 ```
 
-Or run all three back-to-back:
+Or run all five back-to-back:
 
 ```bash
-for s in gif-drawing-board gif-plan-tasks gif-focus-prompt; do
+for s in gif-drawing-board gif-plan-tasks gif-focus-prompt gif-mcp-task-lifecycle gif-mcp-create-task; do
   node scripts/record-ui/$s.js
 done
 ```
 
 Output lands in `docs/ui/`.
+
+> **Note for MCP scripts:** the app must be running AND `data/planner-state.json` must
+> exist (i.e. you've opened the app at least once). The scripts seed a demo project
+> (`demo-mcp-gif`) into your existing state, record, and leave the demo project behind.
+> Delete it from Settings if you want to clean up afterwards.
 
 ## What each script records
 
@@ -72,6 +77,17 @@ Full Focus flow from Plan view:
 - Focus view: task card at top, Generate AI Prompt button
 - Click Generate AI Prompt → generating spinner
 - Full AI prompt in monospace + Execution Checklist
+
+### `gif-mcp-task-lifecycle.js` → `gif-04-mcp-task-lifecycle.gif`
+Agent task lifecycle via MCP REST, browser updates in real time via SSE:
+- Plan view with 3 todo tasks (seeded demo project)
+- `pick_task` called via REST — task 1 flips to "doing" within ~1s, no reload
+- `complete_task` called via REST — task moves to done, activity feed shows 2 agent entries
+
+### `gif-mcp-create-task.js` → `gif-05-mcp-create-task.gif`
+Agent creates a task via MCP REST, it appears live in the browser:
+- Plan view with 2 existing todo tasks
+- `create_task` called via REST — new task card appears in plan within ~1s, no reload
 
 ## Shared helpers (`_shared.js`)
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readServerState, writeServerState } from "@/lib/server-store";
-import type { AppState, Milestone, Task } from "@/lib/types";
+import type { AppState, Milestone, Project, Task } from "@/lib/types";
 
 export async function GET() {
   const state = await readServerState();
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const merged: AppState = existing
       ? {
           ...incoming,
+          projects: mergeProjects(incoming.projects, existing.projects),
           tasks: mergeTasks(incoming.tasks, existing.tasks),
           milestones: mergeMilestones(incoming.milestones, existing.milestones),
           activities: mergeById(incoming.activities, existing.activities),
@@ -32,6 +33,20 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
+}
+
+// For projects: use updatedAt to pick the winner per entity. MCP project edits
+// (rename, goal, focus notes) bump updatedAt, so they survive the next browser sync.
+function mergeProjects(browser: Project[], server: Project[]): Project[] {
+  const serverMap = new Map(server.map((p) => [p.id, p]));
+  const result = browser.map((bp) => {
+    const sp = serverMap.get(bp.id);
+    if (!sp) return bp;
+    return sp.updatedAt > bp.updatedAt ? sp : bp;
+  });
+  const browserIds = new Set(browser.map((p) => p.id));
+  server.filter((p) => !browserIds.has(p.id)).forEach((p) => result.push(p));
+  return result;
 }
 
 // For tasks: use updatedAt (falling back to createdAt) to pick the winner per entity.

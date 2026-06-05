@@ -39,6 +39,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: "object", properties: {} },
     },
     {
+      name: "update_project",
+      description:
+        "Update a project's name, goal, time budget, or focus notes. Use this to rename projects or adjust their high-level metadata.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", description: "Project ID" },
+          name: { type: "string", description: "New project name (optional)" },
+          goal: { type: "string", description: "New project goal (optional)" },
+          time_budget_minutes: {
+            type: "number",
+            description: "New time budget in minutes, must be positive (optional)",
+          },
+          focus_notes: {
+            type: "string",
+            description: "New focus notes (optional)",
+          },
+        },
+        required: ["project_id"],
+      },
+    },
+    {
       name: "list_milestones",
       description:
         "List milestones for a project with per-milestone task completion stats.",
@@ -48,6 +70,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           project_id: { type: "string", description: "Project ID" },
         },
         required: ["project_id"],
+      },
+    },
+    {
+      name: "create_milestone",
+      description:
+        "Create a new milestone in a project. Use milestones to group related tasks into phases.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          project_id: { type: "string", description: "Project ID" },
+          title: { type: "string", description: "Milestone title" },
+          description: { type: "string", description: "Milestone description (optional)" },
+          success_criteria: {
+            type: "string",
+            description: "Success criteria text (optional)",
+          },
+        },
+        required: ["project_id", "title"],
       },
     },
     {
@@ -228,12 +268,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: JSON.stringify(projects, null, 2) }] };
       }
 
+      case "update_project": {
+        const { project_id, name: newName, goal, time_budget_minutes, focus_notes } = args as {
+          project_id: string;
+          name?: string;
+          goal?: string;
+          time_budget_minutes?: number;
+          focus_notes?: string;
+        };
+        const project = await apiFetch<unknown>(`/api/mcp/projects/${project_id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...(typeof newName === "string" ? { name: newName } : {}),
+            ...(typeof goal === "string" ? { goal } : {}),
+            ...(typeof time_budget_minutes === "number" ? { timeBudgetMinutes: time_budget_minutes } : {}),
+            ...(typeof focus_notes === "string" ? { focusNotes: focus_notes } : {}),
+          }),
+        });
+        return { content: [{ type: "text", text: JSON.stringify(project, null, 2) }] };
+      }
+
       case "list_milestones": {
         const { project_id } = args as { project_id: string };
         const milestones = await apiFetch<unknown[]>(
           `/api/mcp/milestones?projectId=${encodeURIComponent(project_id)}`,
         );
         return { content: [{ type: "text", text: JSON.stringify(milestones, null, 2) }] };
+      }
+
+      case "create_milestone": {
+        const { project_id, title, description, success_criteria } = args as {
+          project_id: string;
+          title: string;
+          description?: string;
+          success_criteria?: string;
+        };
+        const milestone = await apiFetch<unknown>("/api/mcp/milestones", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: project_id,
+            title,
+            description,
+            successCriteria: success_criteria,
+          }),
+        });
+        return { content: [{ type: "text", text: JSON.stringify(milestone, null, 2) }] };
       }
 
       case "update_milestone": {

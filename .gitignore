@@ -62,3 +62,7 @@ next-env.d.ts
 
 # local planner data (user data, not for committing)
 /data/
+
+# build/test artifacts
+test-results/
+*.autosave.mp4
